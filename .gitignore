@@ -1,0 +1,20 @@
+# User and editor files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# .NET build output
+**/bin/
+**/obj/
+TestResults/
+coverage/
+
+# Local configuration and secrets
+**/.env
+!**/.env.example
+.kilo/
+
+# OS files
+.DS_Store
+Thumbs.db

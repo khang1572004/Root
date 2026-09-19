@@ -1,0 +1,21 @@
+root = true
+
+[*.cs]
+charset = utf-8-bom
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0058.severity = warning
+dotnet_diagnostic.IDE0063.severity = warning
+dotnet_diagnostic.CA1852.severity = warning
+
+[*.{json,yml,yaml}]
+indent_style = space
+indent_size = 2
+insert_final_newline = true

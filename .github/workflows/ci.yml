@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: template
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: service
+          POSTGRES_USER: service
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U service -d service"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: template/global.json
+      - name: Restore
+        run: dotnet restore Service.sln
+      - name: Verify formatting
+        run: dotnet format Service.sln --verify-no-changes --no-restore
+      - name: Build
+        run: dotnet build Service.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test Service.sln --configuration Release --no-build --no-restore
+        env:
+          ConnectionStrings__Postgres: Host=localhost;Port=5432;Database=service;Username=service;Password=ci-only-password
+      - name: Build API image
+        run: docker build --target final --tag service-api:ci .
+      - name: Build migration bundle
+        run: docker build --target migration-bundle --tag service-migrations:ci .
+      - name: Apply migration bundle
+        run: >-
+          docker run --rm --network host --entrypoint /app/migrate service-migrations:ci
+          --connection 'Host=127.0.0.1;Port=5432;Database=service;Username=service;Password=ci-only-password'
+      - name: Start API and verify health checks
+        run: >-
+          docker run --detach --rm --read-only --tmpfs /tmp --name service-api-ci --network host
+          -e ASPNETCORE_ENVIRONMENT=Production
+          -e ConnectionStrings__Postgres='Host=127.0.0.1;Port=5432;Database=service;Username=service;Password=ci-only-password'
+          -e Jwt__Authority=https://issuer.example.invalid/
+          -e Jwt__Audience=service-api
+          service-api:ci
+          && for attempt in {1..30}; do curl --fail --silent http://127.0.0.1:8080/health/live && curl --fail --silent http://127.0.0.1:8080/health/ready && exit 0; sleep 2; done; docker logs service-api-ci; exit 1
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: service-api:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Generate API image SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: service-api:ci
+          format: cyclonedx
+          output: trivy-sbom.cdx.json
+      - name: Upload API image SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-api-sbom
+          path: template/trivy-sbom.cdx.json
+          if-no-files-found: error
+      - name: Stop API
+        if: always()
+        run: docker stop service-api-ci || true
