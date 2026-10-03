@@ -23,7 +23,7 @@ jobs:
         working-directory: template
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: csharp
           build-mode: manual
@@ -31,4 +31,4 @@ jobs:
         with:
           global-json-file: template/global.json
       - run: dotnet build Service.sln --configuration Release
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
